@@ -127,6 +127,8 @@ image.save("example.png")
 
 ## 🔬 Decoupled-DMD: The Acceleration Magic Behind Z-Image
 
+[![arXiv](https://img.shields.io/badge/Paper-b5212f.svg?logo=arxiv)](http://github.com/Tongyi-MAI/Z-Image/blob/main/Decoupled_DMD.pdf)
+
 Decoupled-DMD is the core few-step distillation algorithm that empowers the 8-step Z-Image model.
 
 Our core insight in Decoupled-DMD  is that the success of existing DMD (Distributaion Matching Distillation) methods is the result of two independent, collaborating mechanisms:
