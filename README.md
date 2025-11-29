@@ -72,7 +72,7 @@ According to the Elo-based Human Preference Evaluation (on [*Alibaba AI Arena*](
 ### 🚀 Quick Start
 Install the latest version of diffusers, use the following command:
 <details>
-  <summary><sup>Click here for details for why you need to install diffusers from source</sup></summary>
+  <summary>Click here for details for why you need to install diffusers from source</summary>
 
   We have submitted two pull requests ([#12703](https://github.com/huggingface/diffusers/pull/12703) and [#12715](https://github.com/huggingface/diffusers/pull/12704)) to the 🤗 diffusers repository to add support for Z-Image. Both PRs have been merged into the latest official diffusers release.
   Therefore, you need to install diffusers from source for the latest features and Z-Image support.
@@ -175,3 +175,7 @@ If you find our work useful in your research, please consider citing:
 ## 🚀 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Tongyi-MAI/Z-Image&type=date&legend=top-left)](https://www.star-history.com/#Tongyi-MAI/Z-Image&type=date&legend=top-left)
+
+## 🤝 We're Hiring!
+
+We're actively looking for **Research Scientists**, **Engineers**, and **Interns** to work on foundational generative models and their applications. Interested candidates please send your resume to: **jingpeng.gp@alibaba-inc.com**
