@@ -169,6 +169,7 @@ Our core insight behind DMDR is that Reinforcement Learning (RL) and Distributio
 - [Cache-DiT](https://github.com/vipshop/cache-dit) offers inference acceleration support for Z-Image with DBCache, Context Parallelism and Tensor Parallelism. Visit their [example](https://github.com/vipshop/cache-dit/blob/main/examples/parallelism/run_zimage_cp.py) for more details.
 - [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) is a pure C++ diffusion model inference engine that supports fast and memory-efficient Z-Image inference across multiple platforms (CUDA, Vulkan, etc.). You can use stable-diffusion.cpp to generate images with Z-Image on machines with as little as 4GB of VRAM. For more information, please refer to [How to Use Z‐Image on a GPU with Only 4GB VRAM](https://github.com/leejet/stable-diffusion.cpp/wiki/How-to-Use-Z%E2%80%90Image-on-a-GPU-with-Only-4GB-VRAM)
 - [LeMiCa](https://github.com/UnicomAI/LeMiCa) provides a training-free, timestep-level acceleration method that conveniently speeds up Z-Image inference. For more details, see [LeMiCa4Z-Image](https://github.com/UnicomAI/LeMiCa/tree/main/LeMiCa4Z-Image).
+- [ComfyUI ZImageLatent](https://github.com/HellerCommaA/ComfyUI-ZImageLatent) provdes an easy to use latent of the official Z-Image resolutions
 
 
 ## 🚀 Star History
