@@ -210,3 +210,6 @@ __marimo__/
 ckpts/
 .isort.cfg
 .pre-commit-config.yaml
+
+# Ignore generated images
+/*.png

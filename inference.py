@@ -13,7 +13,6 @@ from zimage import generate
 # Before starting, put `ckpts/Z-Image-Turbo` in `ckpts` folder after download from `Tongyi-MAI/Z-Image-Turbo`
 def main():
     model_path = "ckpts/Z-Image-Turbo"
-    device = "cuda"
     dtype = torch.bfloat16
     compile = False  # default False for compatibility
     output_path = "example.png"
@@ -29,6 +28,9 @@ def main():
         "silhouetted tiered pagoda (西安大雁塔), blurred colorful distant lights."
     )
 
+    device = "cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu")
+    print("Chosen device: ", device)
+    
     # Load models
     components = load_from_local_dir(model_path, device=device, dtype=dtype, compile=compile)
     set_attention_backend("_native_flash")  # default is "native", this one is a torch native impl ops for your convient

@@ -138,7 +138,8 @@ def load_from_local_dir(
     if verbose:
         logger.info("Moving DiT to GPU...")
     transformer = transformer.to(device)
-    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     transformer.eval()
 
     # VAE
