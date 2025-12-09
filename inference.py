@@ -7,12 +7,19 @@ import warnings
 import torch
 
 warnings.filterwarnings("ignore")
-from utils import AttentionBackend, ensure_model_weights, load_from_local_dir, set_attention_backend
+from utils import (
+    AttentionBackend,
+    ensure_model_weights,
+    load_from_local_dir,
+    set_attention_backend,
+)
 from zimage import generate
 
 
 def main():
-    model_path = ensure_model_weights("ckpts/Z-Image-Turbo", verify=False)  # True to verify with md5
+    model_path = ensure_model_weights(
+        "ckpts/Z-Image-Turbo", verify=False
+    )  # True to verify with md5
     dtype = torch.bfloat16
     compile = False  # default False for compatibility
     output_path = "example.png"
@@ -48,7 +55,9 @@ def main():
                 device = "cpu"
                 print("Chosen device: cpu")
     # Load models
-    components = load_from_local_dir(model_path, device=device, dtype=dtype, compile=compile)
+    components = load_from_local_dir(
+        model_path, device=device, dtype=dtype, compile=compile
+    )
     AttentionBackend.print_available_backends()
     set_attention_backend(attn_backend)
     print(f"Chosen attention backend: {attn_backend}")

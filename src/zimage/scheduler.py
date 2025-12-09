@@ -44,7 +44,9 @@ class FlowMatchEulerDiscreteScheduler:
             use_dynamic_shifting=use_dynamic_shifting,
         )
 
-        timesteps = np.linspace(1, num_train_timesteps, num_train_timesteps, dtype=np.float32)[::-1].copy()
+        timesteps = np.linspace(
+            1, num_train_timesteps, num_train_timesteps, dtype=np.float32
+        )[::-1].copy()
         timesteps = torch.from_numpy(timesteps).to(dtype=torch.float32)
         sigmas = timesteps / num_train_timesteps
 
@@ -76,7 +78,9 @@ class FlowMatchEulerDiscreteScheduler:
         if sigmas is None:
             if timesteps is None:
                 timesteps = np.linspace(
-                    self._sigma_to_t(self.sigma_max), self._sigma_to_t(self.sigma_min), num_inference_steps + 1
+                    self._sigma_to_t(self.sigma_max),
+                    self._sigma_to_t(self.sigma_min),
+                    num_inference_steps + 1,
                 )[:-1]
             sigmas = timesteps / self.num_train_timesteps
         else:
@@ -92,7 +96,9 @@ class FlowMatchEulerDiscreteScheduler:
         if passed_timesteps is None:
             timesteps = sigmas * self.num_train_timesteps
         else:
-            timesteps = torch.from_numpy(passed_timesteps).to(dtype=torch.float32, device=device)
+            timesteps = torch.from_numpy(passed_timesteps).to(
+                dtype=torch.float32, device=device
+            )
 
         sigmas = torch.cat([sigmas, torch.zeros(1, device=sigmas.device)])
 

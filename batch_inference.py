@@ -58,7 +58,9 @@ def select_device() -> str:
 def main():
     model_path = ensure_model_weights("ckpts/Z-Image-Turbo")
     dtype = torch.bfloat16
-    compile = os.environ.get("ZIMAGE_COMPILE", "0") == "1"  # enable torch.compile only when explicitly requested
+    compile = (
+        os.environ.get("ZIMAGE_COMPILE", "0") == "1"
+    )  # enable torch.compile only when explicitly requested
     height = 1024
     width = 1024
     num_inference_steps = 8
@@ -73,7 +75,9 @@ def main():
     if attn_backend is None:
         attn_backend = "_native_math" if device == "cpu" else "native"
 
-    components = load_from_local_dir(model_path, device=device, dtype=dtype, compile=compile)
+    components = load_from_local_dir(
+        model_path, device=device, dtype=dtype, compile=compile
+    )
     AttentionBackend.print_available_backends()
     set_attention_backend(attn_backend)
     print(f"Chosen attention backend: {attn_backend}")
@@ -81,7 +85,7 @@ def main():
     for idx, prompt in enumerate(PROMPTS, start=1):
         output_path = output_dir / f"prompt-{idx:02d}-{slugify(prompt)}.png"
         seed = 42 + idx - 1
-        generator = torch.Generator(device)#.manual_seed(seed)
+        generator = torch.Generator(device)  # .manual_seed(seed)
 
         start_time = time.time()
         images = generate(
