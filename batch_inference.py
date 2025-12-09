@@ -63,11 +63,15 @@ def main():
     width = 1024
     num_inference_steps = 8
     guidance_scale = 0.0
-    attn_backend = os.environ.get("ZIMAGE_ATTENTION", "_native_flash")
     output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
 
     device = select_device()
+
+    # Avoid "No available kernel" errors on CPU/MPS by defaulting to math backend there.
+    attn_backend = os.environ.get("ZIMAGE_ATTENTION")
+    if attn_backend is None:
+        attn_backend = "_native_math" if device == "cpu" else "native"
 
     components = load_from_local_dir(model_path, device=device, dtype=dtype, compile=compile)
     AttentionBackend.print_available_backends()
