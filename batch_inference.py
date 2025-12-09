@@ -58,7 +58,7 @@ def select_device() -> str:
 def main():
     model_path = ensure_model_weights("ckpts/Z-Image-Turbo")
     dtype = torch.bfloat16
-    compile = False
+    compile = os.environ.get("ZIMAGE_COMPILE", "0") == "1"  # enable torch.compile only when explicitly requested
     height = 1024
     width = 1024
     num_inference_steps = 8
@@ -81,7 +81,7 @@ def main():
     for idx, prompt in enumerate(PROMPTS, start=1):
         output_path = output_dir / f"prompt-{idx:02d}-{slugify(prompt)}.png"
         seed = 42 + idx - 1
-        generator = torch.Generator(device).manual_seed(seed)
+        generator = torch.Generator(device)#.manual_seed(seed)
 
         start_time = time.time()
         images = generate(
