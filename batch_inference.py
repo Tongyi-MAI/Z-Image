@@ -6,7 +6,7 @@ import time
 
 import torch
 
-from inference import ensure_weights
+from inference import ensure_model_weights
 from utils import AttentionBackend, load_from_local_dir, set_attention_backend
 from zimage import generate
 
@@ -56,7 +56,7 @@ def select_device() -> str:
 
 
 def main():
-    model_path = ensure_weights("ckpts/Z-Image-Turbo")
+    model_path = ensure_model_weights("ckpts/Z-Image-Turbo")
     dtype = torch.bfloat16
     compile = False
     height = 1024
