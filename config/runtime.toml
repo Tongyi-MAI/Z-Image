@@ -17,7 +17,7 @@ output_path = "auto"
 [inference]
 height = "auto"
 width = "auto"
-num_inference_steps = "auto"
+num_inference_steps = 10
 guidance_scale = "auto"
 # Seed: use integer for deterministic runs; "auto" randomizes.
 seed = "auto"
