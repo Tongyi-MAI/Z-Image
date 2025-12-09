@@ -1,0 +1,28 @@
+# Runtime configuration for Z-Image.
+# Use the literal string "auto" to let the program pick its built-in default.
+# If both an environment variable and a config value are set to different values, the program will error.
+
+[prompts]
+# For batch mode: path to a prompts file (one prompt per line). Use "auto" to use the built-in default path.
+file = "auto"
+# For single-image mode: optional inline prompt text. If set alongside a file, that is a conflict.
+single_prompt = "auto"
+
+[output]
+# Output directory for batch mode.
+output_dir = "auto"
+# Output path for single-image mode.
+output_path = "auto"
+
+[inference]
+height = "auto"
+width = "auto"
+num_inference_steps = "auto"
+guidance_scale = "auto"
+# Seed: use integer for deterministic runs; "auto" randomizes.
+seed = "auto"
+# Attention backend options include: "_flash_3", "flash", "_native_flash", "native", "_native_math".
+# Use "auto" to let the program pick based on device.
+attention_backend = "auto"
+# torch.compile: set true/false or "auto" (defaults to false unless env overrides).
+compile = "auto"

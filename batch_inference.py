@@ -12,6 +12,7 @@ from utils import (
     load_from_local_dir,
     set_attention_backend,
 )
+from utils.config_loader import ConfigConflictError, RuntimeConfig, load_runtime_config
 from zimage import generate
 
 
@@ -19,20 +20,16 @@ def _banner(msg: str) -> None:
     print(f"\n========== {msg} ==========")
 
 
-def read_prompts(path: str) -> list[str]:
+def read_prompts(path: Path) -> list[str]:
     """Read prompts from a text file (one per line, empty lines skipped)."""
 
-    prompt_path = Path(path)
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-    with prompt_path.open("r", encoding="utf-8") as f:
+    if not path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {path}")
+    with path.open("r", encoding="utf-8") as f:
         prompts = [line.strip() for line in f if line.strip()]
     if not prompts:
-        raise ValueError(f"No prompts found in {prompt_path}")
+        raise ValueError(f"No prompts found in {path}")
     return prompts
-
-
-PROMPTS = read_prompts(os.environ.get("PROMPTS_FILE", "prompts/prompt1.txt"))
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -64,22 +61,22 @@ def select_device() -> str:
 
 
 def main():
+    cfg: RuntimeConfig = load_runtime_config()
+
     model_path = ensure_model_weights("ckpts/Z-Image-Turbo")
     dtype = torch.bfloat16
-    compile = (
-        os.environ.get("ZIMAGE_COMPILE", "0") == "1"
-    )  # enable torch.compile only when explicitly requested
-    height = 1024
-    width = 1024
-    num_inference_steps = 8
-    guidance_scale = 0.0
-    output_dir = Path("outputs")
-    output_dir.mkdir(exist_ok=True)
+    compile = cfg.compile
+    height = cfg.height
+    width = cfg.width
+    num_inference_steps = cfg.num_inference_steps
+    guidance_scale = cfg.guidance_scale
+    output_dir = cfg.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     device = select_device()
 
     # Avoid "No available kernel" errors on CPU/MPS by defaulting to math backend there.
-    attn_backend = os.environ.get("ZIMAGE_ATTENTION")
+    attn_backend = cfg.attention_backend
     if attn_backend is None:
         attn_backend = "_native_math" if device == "cpu" else "native"
 
@@ -90,9 +87,14 @@ def main():
     set_attention_backend(attn_backend)
     _banner(f"Attention backend: {attn_backend}")
 
-    for idx, prompt in enumerate(PROMPTS, start=1):
+    prompt_path = cfg.prompt_file
+    if prompt_path is None:
+        raise ConfigConflictError("No prompt file specified; set prompts.file in config")
+    prompts = read_prompts(prompt_path)
+
+    for idx, prompt in enumerate(prompts, start=1):
         output_path = output_dir / f"prompt-{idx:02d}-{slugify(prompt)}.png"
-        seed = numpy.random.randint(0, 10000)
+        seed = cfg.seed + idx - 1 if cfg.seed is not None else numpy.random.randint(0, 10000)
         generator = torch.Generator(device).manual_seed(seed)
 
         start_time = time.time()
@@ -107,7 +109,7 @@ def main():
         )
         elapsed = time.time() - start_time
         images[0].save(output_path)
-        print(f"→ [{idx}/{len(PROMPTS)}] Saved {output_path} in {elapsed:.2f} seconds")
+        print(f"→ [{idx}/{len(prompts)}] Saved {output_path} in {elapsed:.2f} seconds")
 
     _banner("Batch complete")
 

@@ -3,6 +3,7 @@
 import os
 import time
 import warnings
+from pathlib import Path
 
 import torch
 import numpy as np
@@ -14,6 +15,7 @@ from utils import (
     load_from_local_dir,
     set_attention_backend,
 )
+from utils.config_loader import ConfigConflictError, RuntimeConfig, load_runtime_config
 from zimage import generate
 
 
@@ -22,28 +24,34 @@ def _banner(msg: str) -> None:
 
 
 def main():
-    model_path = ensure_model_weights(
-        "ckpts/Z-Image-Turbo", verify=False
-    )  # True to verify with md5
+    cfg: RuntimeConfig = load_runtime_config()
+    model_path = ensure_model_weights("ckpts/Z-Image-Turbo", verify=False)  # True to verify with md5
     dtype = torch.bfloat16
-    compile = False  # default False for compatibility
-    output_path = "example.png"
-    height = 1024
-    width = 1024
-    num_inference_steps = 8
-    guidance_scale = 0.0
-    seed = np.random.randint(0, 10000)
+    compile = cfg.compile
+    output_path: Path = cfg.output_path
+    height = cfg.height
+    width = cfg.width
+    num_inference_steps = cfg.num_inference_steps
+    guidance_scale = cfg.guidance_scale
+    seed = cfg.seed if cfg.seed is not None else np.random.randint(0, 10000)
 
-    # Pick attention backend (env wins; default flash on CUDA, math elsewhere)
-    attn_backend = os.environ.get("ZIMAGE_ATTENTION")
+    # Pick attention backend (env wins via config loader; otherwise flash on CUDA, math elsewhere)
+    attn_backend = cfg.attention_backend
     if attn_backend is None:
         attn_backend = "_native_flash" if torch.cuda.is_available() else "_native_math"
-    prompt = (
-        "Young Chinese woman in red Hanfu, intricate embroidery. Impeccable makeup, red floral forehead pattern. "
-        "Elaborate high bun, golden phoenix headdress, red flowers, beads. Holds round folding fan with lady, trees, bird. "
-        "Neon lightning-bolt lamp (⚡️), bright yellow glow, above extended left palm. Soft-lit outdoor night background, "
-        "silhouetted tiered pagoda (西安大雁塔), blurred colorful distant lights."
-    )
+
+    # Resolve prompt
+    if cfg.prompt_text:
+        prompt = cfg.prompt_text
+    else:
+        prompt_path = cfg.prompt_file
+        if prompt_path is None:
+            raise ConfigConflictError("No prompt source provided; set 'single_prompt' or 'prompt_file'")
+        with prompt_path.open("r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f if line.strip()]
+        if not lines:
+            raise ValueError(f"Prompt file is empty: {prompt_path}")
+        prompt = lines[0]
 
     # Device selection priority: cuda -> tpu -> mps -> cpu
     if torch.cuda.is_available():
