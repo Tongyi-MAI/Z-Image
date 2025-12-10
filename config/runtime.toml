@@ -23,7 +23,7 @@ guidance_scale = 4
 seed = "auto"
 # Attention backend options include: "_flash_3", "flash", "_native_flash", "native", "_native_math".
 # Use "auto" to let the program pick based on device.
-attention_backend = "_native_flash"
+attention_backend = "native"
 # torch.compile: set true/false or "auto" (defaults to false unless env overrides).
 compile = "true"
 
