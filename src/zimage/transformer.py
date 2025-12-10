@@ -20,7 +20,9 @@ from config import (
 
 
 class TimestepEmbedder(nn.Module):
-    def __init__(self, out_size, mid_size=None, frequency_embedding_size=FREQUENCY_EMBEDDING_SIZE):
+    def __init__(
+        self, out_size, mid_size=None, frequency_embedding_size=FREQUENCY_EMBEDDING_SIZE
+    ):
         super().__init__()
         if mid_size is None:
             mid_size = out_size
@@ -36,12 +38,16 @@ class TimestepEmbedder(nn.Module):
         with torch.amp.autocast("cuda", enabled=False):
             half = dim // 2
             freqs = torch.exp(
-                -math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32, device=t.device) / half
+                -math.log(max_period)
+                * torch.arange(start=0, end=half, dtype=torch.float32, device=t.device)
+                / half
             )
             args = t[:, None].float() * freqs[None]
             embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
             if dim % 2:
-                embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+                embedding = torch.cat(
+                    [embedding, torch.zeros_like(embedding[:, :1])], dim=-1
+                )
             return embedding
 
     def forward(self, t):
@@ -86,7 +92,14 @@ def apply_rotary_emb(x_in: torch.Tensor, freqs_cis: torch.Tensor) -> torch.Tenso
 class ZImageAttention(nn.Module):
     _attention_backend = None
 
-    def __init__(self, dim: int, n_heads: int, n_kv_heads: int, qk_norm: bool = True, eps: float = 1e-5):
+    def __init__(
+        self,
+        dim: int,
+        n_heads: int,
+        n_kv_heads: int,
+        qk_norm: bool = True,
+        eps: float = 1e-5,
+    ):
         super().__init__()
         self.n_heads = n_heads
         self.n_kv_heads = n_kv_heads
@@ -95,7 +108,9 @@ class ZImageAttention(nn.Module):
         self.to_q = nn.Linear(dim, n_heads * self.head_dim, bias=False)
         self.to_k = nn.Linear(dim, n_kv_heads * self.head_dim, bias=False)
         self.to_v = nn.Linear(dim, n_kv_heads * self.head_dim, bias=False)
-        self.to_out = nn.ModuleList([nn.Linear(n_heads * self.head_dim, dim, bias=False)])
+        self.to_out = nn.ModuleList(
+            [nn.Linear(n_heads * self.head_dim, dim, bias=False)]
+        )
 
         self.norm_q = RMSNorm(self.head_dim, eps=eps) if qk_norm else None
         self.norm_k = RMSNorm(self.head_dim, eps=eps) if qk_norm else None
@@ -130,7 +145,13 @@ class ZImageAttention(nn.Module):
         from utils.attention import dispatch_attention
 
         hidden_states = dispatch_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False, backend=self._attention_backend
+            query,
+            key,
+            value,
+            attn_mask=attention_mask,
+            dropout_p=0.0,
+            is_causal=False,
+            backend=self._attention_backend,
         )
 
         hidden_states = hidden_states.flatten(2, 3)
@@ -166,7 +187,9 @@ class ZImageTransformerBlock(nn.Module):
         self.ffn_norm2 = RMSNorm(dim, eps=norm_eps)
 
         if modulation:
-            self.adaLN_modulation = nn.ModuleList([nn.Linear(min(dim, ADALN_EMBED_DIM), 4 * dim, bias=True)])
+            self.adaLN_modulation = nn.ModuleList(
+                [nn.Linear(min(dim, ADALN_EMBED_DIM), 4 * dim, bias=True)]
+            )
 
     def forward(
         self,
@@ -189,7 +212,9 @@ class ZImageTransformerBlock(nn.Module):
                 freqs_cis=freqs_cis,
             )
             x = x + gate_msa * self.attention_norm2(attn_out)
-            x = x + gate_mlp * self.ffn_norm2(self.feed_forward(self.ffn_norm1(x) * scale_mlp))
+            x = x + gate_mlp * self.ffn_norm2(
+                self.feed_forward(self.ffn_norm1(x) * scale_mlp)
+            )
         else:
             attn_out = self.attention(
                 self.attention_norm1(x),
@@ -237,10 +262,15 @@ class RopeEmbedder:
         with torch.device("cpu"):
             freqs_cis = []
             for i, (d, e) in enumerate(zip(dim, end)):
-                freqs = 1.0 / (theta ** (torch.arange(0, d, 2, dtype=torch.float64, device="cpu") / d))
+                freqs = 1.0 / (
+                    theta
+                    ** (torch.arange(0, d, 2, dtype=torch.float64, device="cpu") / d)
+                )
                 timestep = torch.arange(e, device=freqs.device, dtype=torch.float64)
                 freqs = torch.outer(timestep, freqs).float()
-                freqs_cis_i = torch.polar(torch.ones_like(freqs), freqs).to(torch.complex64)
+                freqs_cis_i = torch.polar(torch.ones_like(freqs), freqs).to(
+                    torch.complex64
+                )
                 freqs_cis.append(freqs_cis_i)
             return freqs_cis
 
@@ -250,7 +280,9 @@ class RopeEmbedder:
         device = ids.device
 
         if self.freqs_cis is None:
-            self.freqs_cis = self.precompute_freqs_cis(self.axes_dims, self.axes_lens, theta=self.theta)
+            self.freqs_cis = self.precompute_freqs_cis(
+                self.axes_dims, self.axes_lens, theta=self.theta
+            )
             self.freqs_cis = [freqs_cis.to(device) for freqs_cis in self.freqs_cis]
         else:
             if self.freqs_cis[0].device != device:
@@ -297,9 +329,13 @@ class ZImageTransformer2DModel(nn.Module):
         all_x_embedder = {}
         all_final_layer = {}
         for patch_size, f_patch_size in zip(all_patch_size, all_f_patch_size):
-            x_embedder = nn.Linear(f_patch_size * patch_size * patch_size * in_channels, dim, bias=True)
+            x_embedder = nn.Linear(
+                f_patch_size * patch_size * patch_size * in_channels, dim, bias=True
+            )
             all_x_embedder[f"{patch_size}-{f_patch_size}"] = x_embedder
-            final_layer = FinalLayer(dim, patch_size * patch_size * f_patch_size * self.out_channels)
+            final_layer = FinalLayer(
+                dim, patch_size * patch_size * f_patch_size * self.out_channels
+            )
             all_final_layer[f"{patch_size}-{f_patch_size}"] = final_layer
 
         self.all_x_embedder = nn.ModuleDict(all_x_embedder)
@@ -307,14 +343,30 @@ class ZImageTransformer2DModel(nn.Module):
 
         self.noise_refiner = nn.ModuleList(
             [
-                ZImageTransformerBlock(1000 + layer_id, dim, n_heads, n_kv_heads, norm_eps, qk_norm, modulation=True)
+                ZImageTransformerBlock(
+                    1000 + layer_id,
+                    dim,
+                    n_heads,
+                    n_kv_heads,
+                    norm_eps,
+                    qk_norm,
+                    modulation=True,
+                )
                 for layer_id in range(n_refiner_layers)
             ]
         )
 
         self.context_refiner = nn.ModuleList(
             [
-                ZImageTransformerBlock(layer_id, dim, n_heads, n_kv_heads, norm_eps, qk_norm, modulation=False)
+                ZImageTransformerBlock(
+                    layer_id,
+                    dim,
+                    n_heads,
+                    n_kv_heads,
+                    norm_eps,
+                    qk_norm,
+                    modulation=False,
+                )
                 for layer_id in range(n_refiner_layers)
             ]
         )
@@ -330,7 +382,9 @@ class ZImageTransformer2DModel(nn.Module):
 
         self.layers = nn.ModuleList(
             [
-                ZImageTransformerBlock(layer_id, dim, n_heads, n_kv_heads, norm_eps, qk_norm)
+                ZImageTransformerBlock(
+                    layer_id, dim, n_heads, n_kv_heads, norm_eps, qk_norm
+                )
                 for layer_id in range(n_layers)
             ]
         )
@@ -340,9 +394,13 @@ class ZImageTransformer2DModel(nn.Module):
         self.axes_dims = axes_dims
         self.axes_lens = axes_lens
 
-        self.rope_embedder = RopeEmbedder(theta=rope_theta, axes_dims=axes_dims, axes_lens=axes_lens)
+        self.rope_embedder = RopeEmbedder(
+            theta=rope_theta, axes_dims=axes_dims, axes_lens=axes_lens
+        )
 
-    def unpatchify(self, x: List[torch.Tensor], size: List[Tuple], patch_size, f_patch_size) -> List[torch.Tensor]:
+    def unpatchify(
+        self, x: List[torch.Tensor], size: List[Tuple], patch_size, f_patch_size
+    ) -> List[torch.Tensor]:
         pH = pW = patch_size
         pF = f_patch_size
         bsz = len(x)
@@ -362,7 +420,10 @@ class ZImageTransformer2DModel(nn.Module):
     def create_coordinate_grid(size, start=None, device=None):
         if start is None:
             start = (0 for _ in size)
-        axes = [torch.arange(x0, x0 + span, dtype=torch.int32, device=device) for x0, span in zip(start, size)]
+        axes = [
+            torch.arange(x0, x0 + span, dtype=torch.int32, device=device)
+            for x0, span in zip(start, size)
+        ]
         grids = torch.meshgrid(axes, indexing="ij")
         return torch.stack(grids, dim=-1)
 
@@ -421,7 +482,9 @@ class ZImageTransformer2DModel(nn.Module):
             F_tokens, H_tokens, W_tokens = F // pF, H // pH, W // pW
 
             image = image.view(C, F_tokens, pF, H_tokens, pH, W_tokens, pW)
-            image = image.permute(1, 3, 5, 2, 4, 6, 0).reshape(F_tokens * H_tokens * W_tokens, pF * pH * pW * C)
+            image = image.permute(1, 3, 5, 2, 4, 6, 0).reshape(
+                F_tokens * H_tokens * W_tokens, pF * pH * pW * C
+            )
 
             image_ori_len = len(image)
             image_padding_len = (-image_ori_len) % SEQ_MULTI_OF
@@ -434,13 +497,17 @@ class ZImageTransformer2DModel(nn.Module):
             image_padded_pos_ids = torch.cat(
                 [
                     image_ori_pos_ids,
-                    self.create_coordinate_grid(size=(1, 1, 1), start=(0, 0, 0), device=device)
+                    self.create_coordinate_grid(
+                        size=(1, 1, 1), start=(0, 0, 0), device=device
+                    )
                     .flatten(0, 2)
                     .repeat(image_padding_len, 1),
                 ],
                 dim=0,
             )
-            all_image_pos_ids.append(image_padded_pos_ids if image_padding_len > 0 else image_ori_pos_ids)
+            all_image_pos_ids.append(
+                image_padded_pos_ids if image_padding_len > 0 else image_ori_pos_ids
+            )
             # pad mask
             image_pad_mask = torch.cat(
                 [
@@ -507,14 +574,20 @@ class ZImageTransformer2DModel(nn.Module):
         adaln_input = t.type_as(x)
         x[torch.cat(x_inner_pad_mask)] = self.x_pad_token
         x = list(x.split(x_item_seqlens, dim=0))
-        x_freqs_cis = list(self.rope_embedder(torch.cat(x_pos_ids, dim=0)).split([len(_) for _ in x_pos_ids], dim=0))
+        x_freqs_cis = list(
+            self.rope_embedder(torch.cat(x_pos_ids, dim=0)).split(
+                [len(_) for _ in x_pos_ids], dim=0
+            )
+        )
 
         x = pad_sequence(x, batch_first=True, padding_value=0.0)
         x_freqs_cis = pad_sequence(x_freqs_cis, batch_first=True, padding_value=0.0)
         # Clarify the length matches to satisfy Dynamo due to "Symbolic Shape Inference" to avoid compilation errors
         x_freqs_cis = x_freqs_cis[:, : x.shape[1]]
 
-        x_attn_mask = torch.zeros((bsz, x_max_item_seqlen), dtype=torch.bool, device=device)
+        x_attn_mask = torch.zeros(
+            (bsz, x_max_item_seqlen), dtype=torch.bool, device=device
+        )
         for i, seq_len in enumerate(x_item_seqlens):
             x_attn_mask[i, :seq_len] = 1
 
@@ -530,14 +603,20 @@ class ZImageTransformer2DModel(nn.Module):
         cap_feats[torch.cat(cap_inner_pad_mask)] = self.cap_pad_token
         cap_feats = list(cap_feats.split(cap_item_seqlens, dim=0))
         cap_freqs_cis = list(
-            self.rope_embedder(torch.cat(cap_pos_ids, dim=0)).split([len(_) for _ in cap_pos_ids], dim=0)
+            self.rope_embedder(torch.cat(cap_pos_ids, dim=0)).split(
+                [len(_) for _ in cap_pos_ids], dim=0
+            )
         )
 
         cap_feats = pad_sequence(cap_feats, batch_first=True, padding_value=0.0)
         cap_freqs_cis = pad_sequence(cap_freqs_cis, batch_first=True, padding_value=0.0)
-        cap_freqs_cis = cap_freqs_cis[:, : cap_feats.shape[1]]  # same for dynamo compatibility
+        cap_freqs_cis = cap_freqs_cis[
+            :, : cap_feats.shape[1]
+        ]  # same for dynamo compatibility
 
-        cap_attn_mask = torch.zeros((bsz, cap_max_item_seqlen), dtype=torch.bool, device=device)
+        cap_attn_mask = torch.zeros(
+            (bsz, cap_max_item_seqlen), dtype=torch.bool, device=device
+        )
         for i, seq_len in enumerate(cap_item_seqlens):
             cap_attn_mask[i, :seq_len] = 1
 
@@ -550,21 +629,29 @@ class ZImageTransformer2DModel(nn.Module):
             x_len = x_item_seqlens[i]
             cap_len = cap_item_seqlens[i]
             unified.append(torch.cat([x[i][:x_len], cap_feats[i][:cap_len]]))
-            unified_freqs_cis.append(torch.cat([x_freqs_cis[i][:x_len], cap_freqs_cis[i][:cap_len]]))
+            unified_freqs_cis.append(
+                torch.cat([x_freqs_cis[i][:x_len], cap_freqs_cis[i][:cap_len]])
+            )
         unified_item_seqlens = [a + b for a, b in zip(cap_item_seqlens, x_item_seqlens)]
         assert unified_item_seqlens == [len(_) for _ in unified]
         unified_max_item_seqlen = max(unified_item_seqlens)
 
         unified = pad_sequence(unified, batch_first=True, padding_value=0.0)
-        unified_freqs_cis = pad_sequence(unified_freqs_cis, batch_first=True, padding_value=0.0)
-        unified_attn_mask = torch.zeros((bsz, unified_max_item_seqlen), dtype=torch.bool, device=device)
+        unified_freqs_cis = pad_sequence(
+            unified_freqs_cis, batch_first=True, padding_value=0.0
+        )
+        unified_attn_mask = torch.zeros(
+            (bsz, unified_max_item_seqlen), dtype=torch.bool, device=device
+        )
         for i, seq_len in enumerate(unified_item_seqlens):
             unified_attn_mask[i, :seq_len] = 1
 
         for layer in self.layers:
             unified = layer(unified, unified_attn_mask, unified_freqs_cis, adaln_input)
 
-        unified = self.all_final_layer[f"{patch_size}-{f_patch_size}"](unified, adaln_input)
+        unified = self.all_final_layer[f"{patch_size}-{f_patch_size}"](
+            unified, adaln_input
+        )
         unified = list(unified.unbind(dim=0))
         x = self.unpatchify(unified, x_size, patch_size, f_patch_size)
 

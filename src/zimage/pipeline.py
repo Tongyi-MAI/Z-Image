@@ -44,14 +44,20 @@ def retrieve_timesteps(
     if timesteps is not None and sigmas is not None:
         raise ValueError("Only one of `timesteps` or `sigmas` can be passed.")
     if timesteps is not None:
-        accepts_timesteps = "timesteps" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+        accepts_timesteps = "timesteps" in set(
+            inspect.signature(scheduler.set_timesteps).parameters.keys()
+        )
         if not accepts_timesteps:
-            raise ValueError(f"The scheduler does not support custom timestep schedules.")
+            raise ValueError(
+                f"The scheduler does not support custom timestep schedules."
+            )
         scheduler.set_timesteps(timesteps=timesteps, device=device, **kwargs)
         timesteps = scheduler.timesteps
         num_inference_steps = len(timesteps)
     elif sigmas is not None:
-        accept_sigmas = "sigmas" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+        accept_sigmas = "sigmas" in set(
+            inspect.signature(scheduler.set_timesteps).parameters.keys()
+        )
         if not accept_sigmas:
             raise ValueError(f"The scheduler does not support custom sigmas schedules.")
         scheduler.set_timesteps(sigmas=sigmas, device=device, **kwargs)
@@ -103,7 +109,9 @@ def generate(
         batch_size = len(prompt)
 
     do_classifier_free_guidance = guidance_scale > 1.0
-    logger.info(f"Generating image: {height}x{width}, steps={num_inference_steps}, cfg={guidance_scale}")
+    logger.info(
+        f"Generating image: {height}x{width}, steps={num_inference_steps}, cfg={guidance_scale}"
+    )
 
     formatted_prompts = []
     for p in prompt:
@@ -176,17 +184,28 @@ def generate(
             negative_prompt_embeds_list.append(neg_embeds[i][neg_masks[i]])
 
     if num_images_per_prompt > 1:
-        prompt_embeds_list = [pe for pe in prompt_embeds_list for _ in range(num_images_per_prompt)]
+        prompt_embeds_list = [
+            pe for pe in prompt_embeds_list for _ in range(num_images_per_prompt)
+        ]
         if do_classifier_free_guidance:
             negative_prompt_embeds_list = [
-                npe for npe in negative_prompt_embeds_list for _ in range(num_images_per_prompt)
+                npe
+                for npe in negative_prompt_embeds_list
+                for _ in range(num_images_per_prompt)
             ]
 
     height_latent = 2 * (int(height) // vae_scale)
     width_latent = 2 * (int(width) // vae_scale)
-    shape = (batch_size * num_images_per_prompt, transformer.in_channels, height_latent, width_latent)
+    shape = (
+        batch_size * num_images_per_prompt,
+        transformer.in_channels,
+        height_latent,
+        width_latent,
+    )
 
-    latents = torch.randn(shape, generator=generator, device=device, dtype=torch.float32)
+    latents = torch.randn(
+        shape, generator=generator, device=device, dtype=torch.float32
+    )
 
     actual_batch_size = batch_size * num_images_per_prompt
     image_seq_len = (latents.shape[2] // 2) * (latents.shape[3] // 2)
@@ -216,7 +235,9 @@ def generate(
     for i, t in enumerate(tqdm(timesteps, desc="Denoising", total=len(timesteps))):
         # If current t is 0 and it's the last step, skip computation
         if t == 0 and i == len(timesteps) - 1:
-            logger.debug(f"Step {i+1}/{num_inference_steps} | t: {t.item():.2f} | Skipping last step")
+            logger.debug(
+                f"Step {i+1}/{num_inference_steps} | t: {t.item():.2f} | Skipping last step"
+            )
             continue
 
         timestep = t.expand(latents.shape[0])
@@ -224,7 +245,11 @@ def generate(
         t_norm = timestep[0].item()
 
         current_guidance_scale = guidance_scale
-        if do_classifier_free_guidance and cfg_truncation is not None and float(cfg_truncation) <= 1:
+        if (
+            do_classifier_free_guidance
+            and cfg_truncation is not None
+            and float(cfg_truncation) <= 1
+        ):
             if t_norm > cfg_truncation:
                 current_guidance_scale = 0.0
 
@@ -232,7 +257,9 @@ def generate(
 
         if apply_cfg:
             latents_typed = latents.to(
-                transformer.dtype if hasattr(transformer, "dtype") else next(transformer.parameters()).dtype
+                transformer.dtype
+                if hasattr(transformer, "dtype")
+                else next(transformer.parameters()).dtype
             )
             latent_model_input = latents_typed.repeat(2, 1, 1, 1)
             prompt_embeds_model_input = prompt_embeds_list + negative_prompt_embeds_list
@@ -272,7 +299,9 @@ def generate(
             noise_pred = torch.stack([t.float() for t in model_out_list], dim=0)
 
         noise_pred = -noise_pred.squeeze(2)
-        latents = scheduler.step(noise_pred.to(torch.float32), t, latents, return_dict=False)[0]
+        latents = scheduler.step(
+            noise_pred.to(torch.float32), t, latents, return_dict=False
+        )[0]
         assert latents.dtype == torch.float32
 
     if output_type == "latent":
