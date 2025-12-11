@@ -110,17 +110,6 @@ python inference.py
 ```
 
 #### (2) Diffusers Inference
-#### (1) PyTorch Native Inference
-Build a virtual environment you like and then install the dependencies:
-```bash
-pip install -e .
-```
-Then run the following code to generate an image:
-```bash
-python inference.py
-```
-
-#### (2) Diffusers Inference
 Install the latest version of diffusers, use the following command:
 <details>
   <summary>Click here for details for why you need to install diffusers from source</summary>
