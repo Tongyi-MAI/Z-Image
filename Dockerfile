@@ -12,12 +12,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose port
+# Expose port (not used in serverless, but kept for compatibility)
 EXPOSE 8000
 
-# Health check
+# Health check (not used in serverless, but kept for compatibility)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run FastAPI server
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run RunPod serverless handler
+CMD ["python", "handler.py"]

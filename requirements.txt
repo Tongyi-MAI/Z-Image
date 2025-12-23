@@ -15,3 +15,6 @@ pydantic>=2.0.0
 # Additional dependencies for Z-Image
 tqdm
 
+# RunPod Serverless SDK
+runpod>=1.5.0
+
