@@ -47,7 +47,9 @@ def load_config(config_path: str) -> dict:
         return json.load(f)
 
 
-def load_sharded_safetensors(weight_dir: Path, device: str = "cuda", dtype: Optional[torch.dtype] = None) -> dict:
+def load_sharded_safetensors(
+    weight_dir: Path, device: str = "cuda", dtype: Optional[torch.dtype] = None
+) -> dict:
     """Load sharded safetensors from a directory."""
     weight_dir = Path(weight_dir)
     index_files = list(weight_dir.glob("*.safetensors.index.json"))
@@ -72,7 +74,9 @@ def load_sharded_safetensors(weight_dir: Path, device: str = "cuda", dtype: Opti
 
     # Cast to target dtype if specified
     if dtype is not None:
-        state_dict = {k: v.to(dtype) if v.dtype != dtype else v for k, v in state_dict.items()}
+        state_dict = {
+            k: v.to(dtype) if v.dtype != dtype else v for k, v in state_dict.items()
+        }
 
     return state_dict
 
@@ -113,12 +117,18 @@ def load_from_local_dir(
 
     with torch.device("meta"):
         transformer = ZImageTransformer2DModel(
-            all_patch_size=tuple(config.get("all_patch_size", DEFAULT_TRANSFORMER_PATCH_SIZE)),
-            all_f_patch_size=tuple(config.get("all_f_patch_size", DEFAULT_TRANSFORMER_F_PATCH_SIZE)),
+            all_patch_size=tuple(
+                config.get("all_patch_size", DEFAULT_TRANSFORMER_PATCH_SIZE)
+            ),
+            all_f_patch_size=tuple(
+                config.get("all_f_patch_size", DEFAULT_TRANSFORMER_F_PATCH_SIZE)
+            ),
             in_channels=config.get("in_channels", DEFAULT_TRANSFORMER_IN_CHANNELS),
             dim=config.get("dim", DEFAULT_TRANSFORMER_DIM),
             n_layers=config.get("n_layers", DEFAULT_TRANSFORMER_N_LAYERS),
-            n_refiner_layers=config.get("n_refiner_layers", DEFAULT_TRANSFORMER_N_REFINER_LAYERS),
+            n_refiner_layers=config.get(
+                "n_refiner_layers", DEFAULT_TRANSFORMER_N_REFINER_LAYERS
+            ),
             n_heads=config.get("n_heads", DEFAULT_TRANSFORMER_N_HEADS),
             n_kv_heads=config.get("n_kv_heads", DEFAULT_TRANSFORMER_N_KV_HEADS),
             norm_eps=config.get("norm_eps", DEFAULT_TRANSFORMER_NORM_EPS),
@@ -151,7 +161,9 @@ def load_from_local_dir(
     vae = LocalAutoencoderKL(
         in_channels=vae_config.get("in_channels", DEFAULT_VAE_IN_CHANNELS),
         out_channels=vae_config.get("out_channels", DEFAULT_VAE_OUT_CHANNELS),
-        down_block_types=tuple(vae_config.get("down_block_types", ("DownEncoderBlock2D",))),
+        down_block_types=tuple(
+            vae_config.get("down_block_types", ("DownEncoderBlock2D",))
+        ),
         up_block_types=tuple(vae_config.get("up_block_types", ("UpDecoderBlock2D",))),
         block_out_channels=tuple(vae_config.get("block_out_channels", (64,))),
         layers_per_block=vae_config.get("layers_per_block", 1),
@@ -201,9 +213,13 @@ def load_from_local_dir(
     scheduler_dir = model_dir / "scheduler"
     scheduler_config = load_config(str(scheduler_dir / "scheduler_config.json"))
     scheduler = FlowMatchEulerDiscreteScheduler(
-        num_train_timesteps=scheduler_config.get("num_train_timesteps", DEFAULT_SCHEDULER_NUM_TRAIN_TIMESTEPS),
+        num_train_timesteps=scheduler_config.get(
+            "num_train_timesteps", DEFAULT_SCHEDULER_NUM_TRAIN_TIMESTEPS
+        ),
         shift=scheduler_config.get("shift", DEFAULT_SCHEDULER_SHIFT),
-        use_dynamic_shifting=scheduler_config.get("use_dynamic_shifting", DEFAULT_SCHEDULER_USE_DYNAMIC_SHIFTING),
+        use_dynamic_shifting=scheduler_config.get(
+            "use_dynamic_shifting", DEFAULT_SCHEDULER_USE_DYNAMIC_SHIFTING
+        ),
     )
 
     if compile:

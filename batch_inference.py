@@ -3,28 +3,58 @@
 import os
 from pathlib import Path
 import time
-
+import numpy
 import torch
 
-from inference import ensure_weights
-from utils import AttentionBackend, load_from_local_dir, set_attention_backend
+from utils import (
+    AttentionBackend,
+    ensure_model_weights,
+    load_from_local_dir,
+    set_attention_backend,
+)
+from utils.config_loader import ConfigConflictError, RuntimeConfig, load_runtime_config
 from zimage import generate
 
 
-def read_prompts(path: str) -> list[str]:
+def _banner(msg: str) -> None:
+    print(f"\n========== {msg} ==========")
+
+
+def _print_config_summary(cfg: RuntimeConfig, *, attn_backend: str, prompt_path: Path):
+    _banner("Runtime configuration")
+    print(f"prompt_file   : {prompt_path}")
+    print(f"output_dir    : {cfg.output_dir}")
+    print(f"height x width: {cfg.height} x {cfg.width}")
+    print(f"steps         : {cfg.num_inference_steps}")
+    print(f"guidance      : {cfg.guidance_scale}")
+    print(f"attention     : {attn_backend}")
+    print(f"compile       : {cfg.compile}")
+    print(f"seed          : {cfg.seed if cfg.seed is not None else 'auto/random'}")
+
+
+def _resolve_compile(flag: bool) -> bool:
+    if not flag:
+        return False
+    try:
+        import triton  # type: ignore
+
+        _ = triton
+        return True
+    except Exception:
+        _banner("Triton not available; disabling torch.compile")
+        return False
+
+
+def read_prompts(path: Path) -> list[str]:
     """Read prompts from a text file (one per line, empty lines skipped)."""
 
-    prompt_path = Path(path)
-    if not prompt_path.exists():
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-    with prompt_path.open("r", encoding="utf-8") as f:
+    if not path.exists():
+        raise FileNotFoundError(f"Prompt file not found: {path}")
+    with path.open("r", encoding="utf-8") as f:
         prompts = [line.strip() for line in f if line.strip()]
     if not prompts:
-        raise ValueError(f"No prompts found in {prompt_path}")
+        raise ValueError(f"No prompts found in {path}")
     return prompts
-
-
-PROMPTS = read_prompts(os.environ.get("PROMPTS_FILE", "prompts/prompt1.txt"))
 
 
 def slugify(text: str, max_len: int = 60) -> str:
@@ -39,44 +69,64 @@ def select_device() -> str:
     """Choose the best available device without repeating detection logic."""
 
     if torch.cuda.is_available():
-        print("Chosen device: cuda")
+        _banner("Chosen device: cuda")
         return "cuda"
     try:
         import torch_xla.core.xla_model as xm
 
         device = xm.xla_device()
-        print("Chosen device: tpu")
+        _banner("Chosen device: tpu")
         return device
     except (ImportError, RuntimeError):
         if torch.backends.mps.is_available():
-            print("Chosen device: mps")
+            _banner("Chosen device: mps")
             return "mps"
-        print("Chosen device: cpu")
+        _banner("Chosen device: cpu")
         return "cpu"
 
 
 def main():
-    model_path = ensure_weights("ckpts/Z-Image-Turbo")
+    cfg: RuntimeConfig = load_runtime_config()
+
+    model_path = ensure_model_weights("ckpts/Z-Image-Turbo")
     dtype = torch.bfloat16
-    compile = False
-    height = 1024
-    width = 1024
-    num_inference_steps = 8
-    guidance_scale = 0.0
-    attn_backend = os.environ.get("ZIMAGE_ATTENTION", "_native_flash")
-    output_dir = Path("outputs")
-    output_dir.mkdir(exist_ok=True)
+    compile = _resolve_compile(bool(cfg.compile))
+    height = cfg.height
+    width = cfg.width
+    num_inference_steps = cfg.num_inference_steps
+    guidance_scale = cfg.guidance_scale
+    output_dir = cfg.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     device = select_device()
 
-    components = load_from_local_dir(model_path, device=device, dtype=dtype, compile=compile)
+    # Avoid "No available kernel" errors on CPU/MPS by defaulting to math backend there.
+    attn_backend = cfg.attention_backend
+    if attn_backend is None:
+        attn_backend = "_native_math" if device == "cpu" else "native"
+
+    components = load_from_local_dir(
+        model_path, device=device, dtype=dtype, compile=compile
+    )
     AttentionBackend.print_available_backends()
     set_attention_backend(attn_backend)
-    print(f"Chosen attention backend: {attn_backend}")
+    _banner(f"Attention backend: {attn_backend}")
 
-    for idx, prompt in enumerate(PROMPTS, start=1):
+    prompt_path = cfg.prompt_file
+    if prompt_path is None:
+        raise ConfigConflictError(
+            "No prompt file specified; set prompts.file in config"
+        )
+    _print_config_summary(cfg, attn_backend=attn_backend, prompt_path=prompt_path)
+    prompts = read_prompts(prompt_path)
+
+    for idx, prompt in enumerate(prompts, start=1):
         output_path = output_dir / f"prompt-{idx:02d}-{slugify(prompt)}.png"
-        seed = 42 + idx - 1
+        seed = (
+            cfg.seed + idx - 1
+            if cfg.seed is not None
+            else numpy.random.randint(0, 10000)
+        )
         generator = torch.Generator(device).manual_seed(seed)
 
         start_time = time.time()
@@ -91,9 +141,9 @@ def main():
         )
         elapsed = time.time() - start_time
         images[0].save(output_path)
-        print(f"[{idx}/{len(PROMPTS)}] Saved {output_path} in {elapsed:.2f} seconds")
+        print(f"→ [{idx}/{len(prompts)}] Saved {output_path} in {elapsed:.2f} seconds")
 
-    print("Done.")
+    _banner("Batch complete")
 
 
 if __name__ == "__main__":
