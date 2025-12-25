@@ -452,7 +452,7 @@ def dispatch_attention(
 
 def set_attention_backend(backend: Union[str, AttentionBackend, None]):
     try:
-        from zimage.transformer import ZImageAttention
+        from src.zimage.transformer import ZImageAttention
 
         if backend is not None:
             backend = str(backend)

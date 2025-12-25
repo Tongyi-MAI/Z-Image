@@ -6,7 +6,7 @@ from typing import List, Optional, Union
 from loguru import logger
 import torch
 
-from config import (
+from src.config import (
     BASE_IMAGE_SEQ_LEN,
     BASE_SHIFT,
     DEFAULT_CFG_TRUNCATION,

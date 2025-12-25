@@ -8,7 +8,7 @@ from typing import Optional, List, Tuple, Dict
 from loguru import logger
 import torch
 
-from config import BYTES_PER_GB
+from src.config import BYTES_PER_GB
 
 
 def format_bytes(size: float) -> str:
