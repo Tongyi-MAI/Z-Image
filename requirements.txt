@@ -1,0 +1,20 @@
+# Core dependencies from pyproject.toml
+torch>=2.5.0
+transformers>=4.51.0
+safetensors
+loguru
+pillow
+accelerate
+huggingface_hub>=0.25.0
+
+# FastAPI dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# Additional dependencies for Z-Image
+tqdm
+
+# RunPod Serverless SDK
+runpod>=1.5.0
+

@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_sequence
 
-from config import (
+from src.config import (
     ADALN_EMBED_DIM,
     FREQUENCY_EMBEDDING_SIZE,
     MAX_PERIOD,
@@ -127,7 +127,7 @@ class ZImageAttention(nn.Module):
         query, key = query.to(dtype), key.to(dtype)
 
         # Dispatch
-        from utils.attention import dispatch_attention
+        from src.utils.attention import dispatch_attention
 
         hidden_states = dispatch_attention(
             query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False, backend=self._attention_backend
