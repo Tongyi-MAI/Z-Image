@@ -4,12 +4,17 @@
 from enum import Enum
 import functools
 import inspect
+import warnings
 from typing import Callable, Dict, List, Optional, Union
 
 import torch
 import torch.nn.functional as F
 
-from .import_utils import is_flash_attn_3_available, is_flash_attn_available, is_torch_version
+from .import_utils import (
+    is_flash_attn_3_available,
+    is_flash_attn_available,
+    is_torch_version,
+)
 
 _CAN_USE_FLASH_ATTN_2 = is_flash_attn_available()
 _CAN_USE_FLASH_ATTN_3 = is_flash_attn_3_available()
@@ -17,11 +22,14 @@ _CAN_USE_FLASH_ATTN_3 = is_flash_attn_3_available()
 # MPS Flash Attention (Apple Silicon)
 try:
     import mps_flash_attn
+
     _CAN_USE_MPS_FLASH = mps_flash_attn.is_available()
 except ImportError:
     _CAN_USE_MPS_FLASH = False
     mps_flash_attn = None
-_TORCH_VERSION_CHECK = is_torch_version(">=", "2.5.0")  # have enable_gqa func call in SPDA
+_TORCH_VERSION_CHECK = is_torch_version(
+    ">=", "2.5.0"
+)  # have enable_gqa func call in SPDA
 
 if not _TORCH_VERSION_CHECK:
     raise RuntimeError("PyTorch version must be >= 2.5.0 to use this backend.")
@@ -29,19 +37,40 @@ else:
     print("PyTorch version is >= 2.5.0, check pass.")
 
 if _CAN_USE_FLASH_ATTN_2:
-    from flash_attn import flash_attn_func, flash_attn_varlen_func
+    try:
+        from flash_attn import flash_attn_func, flash_attn_varlen_func
+    except (ImportError, RuntimeError, ValueError) as e:
+        warnings.warn(
+            f"Failed to import flash_attn: {e}. Falling back to native attention backend.",
+            stacklevel=2,
+        )
+        _CAN_USE_FLASH_ATTN_2 = False
+        flash_attn_func = None
+        flash_attn_varlen_func = None
 else:
     flash_attn_func = None
     flash_attn_varlen_func = None
 
 if _CAN_USE_FLASH_ATTN_3:
-    from flash_attn_interface import (
-        flash_attn_func as flash_attn_3_func,
-        flash_attn_varlen_func as flash_attn_3_varlen_func,
-    )
+    try:
+        from flash_attn_interface import (
+            flash_attn_func as flash_attn_3_func,
+            flash_attn_varlen_func as flash_attn_3_varlen_func,
+        )
 
-    _flash_attn_3_sig = inspect.signature(flash_attn_3_func)
-    _FLASH_ATTN_3_SUPPORTS_RETURN_PROBS = "return_attn_probs" in _flash_attn_3_sig.parameters
+        _flash_attn_3_sig = inspect.signature(flash_attn_3_func)
+        _FLASH_ATTN_3_SUPPORTS_RETURN_PROBS = (
+            "return_attn_probs" in _flash_attn_3_sig.parameters
+        )
+    except (ImportError, RuntimeError, ValueError) as e:
+        warnings.warn(
+            f"Failed to import flash_attn_interface: {e}. Falling back to native attention backend.",
+            stacklevel=2,
+        )
+        _CAN_USE_FLASH_ATTN_3 = False
+        flash_attn_3_func = None
+        flash_attn_3_varlen_func = None
+        _FLASH_ATTN_3_SUPPORTS_RETURN_PROBS = False
 else:
     flash_attn_3_func = None
     flash_attn_3_varlen_func = None
@@ -116,7 +145,9 @@ def _process_mask(attn_mask: Optional[torch.Tensor], dtype: torch.dtype):
     return attn_mask
 
 
-def _normalize_attn_mask(attn_mask: torch.Tensor, batch_size: int, seq_len_k: int) -> torch.Tensor:
+def _normalize_attn_mask(
+    attn_mask: torch.Tensor, batch_size: int, seq_len_k: int
+) -> torch.Tensor:
     """Normalize an attention mask to shape [batch_size, seq_len_k] (bool)."""
     if attn_mask.dtype != torch.bool:
         # Try to convert float mask back to bool if possible, or assume it's float mask
@@ -155,8 +186,12 @@ def _prepare_for_flash_attn_varlen_without_mask(
     seqlens_q = torch.full((batch_size,), seq_len_q, dtype=torch.int32, device=device)
     seqlens_k = torch.full((batch_size,), seq_len_kv, dtype=torch.int32, device=device)
 
-    cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_q
-    cu_seqlens_k = torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_kv
+    cu_seqlens_q = (
+        torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_q
+    )
+    cu_seqlens_k = (
+        torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_kv
+    )
 
     return (seqlens_q, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (seq_len_q, seq_len_kv)
 
@@ -170,15 +205,23 @@ def _prepare_for_flash_attn_varlen_with_mask(
     seqlens_q = torch.full((batch_size,), seq_len_q, dtype=torch.int32, device=device)
     seqlens_k = attn_mask.sum(dim=1, dtype=torch.int32)
     # Use arange for Q to avoid Inductor crash
-    cu_seqlens_q = torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_q
+    cu_seqlens_q = (
+        torch.arange(batch_size + 1, dtype=torch.int32, device=device) * seq_len_q
+    )
 
     cu_seqlens_k = torch.zeros(batch_size + 1, dtype=torch.int32, device=device)
     cu_seqlens_k[1:] = torch.cumsum(seqlens_k, dim=0)
 
     max_seqlen_q = seq_len_q
-    max_seqlen_k = attn_mask.shape[1]  # not max().item(), static shape to avoid graph break
+    max_seqlen_k = attn_mask.shape[
+        1
+    ]  # not max().item(), static shape to avoid graph break
 
-    return (seqlens_q, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (max_seqlen_q, max_seqlen_k)
+    return (
+        (seqlens_q, seqlens_k),
+        (cu_seqlens_q, cu_seqlens_k),
+        (max_seqlen_q, max_seqlen_k),
+    )
 
 
 def _prepare_for_flash_attn_varlen(
@@ -189,11 +232,18 @@ def _prepare_for_flash_attn_varlen(
     device: Optional[torch.device] = None,
 ) -> None:
     if attn_mask is None:
-        return _prepare_for_flash_attn_varlen_without_mask(batch_size, seq_len_q, seq_len_kv, device)
-    return _prepare_for_flash_attn_varlen_with_mask(batch_size, seq_len_q, attn_mask, device)
+        return _prepare_for_flash_attn_varlen_without_mask(
+            batch_size, seq_len_q, seq_len_kv, device
+        )
+    return _prepare_for_flash_attn_varlen_with_mask(
+        batch_size, seq_len_q, attn_mask, device
+    )
 
 
-@register_backend(AttentionBackend.FLASH, constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16])
+@register_backend(
+    AttentionBackend.FLASH,
+    constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16],
+)
 def _flash_attention(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -219,7 +269,10 @@ def _flash_attention(
     return out
 
 
-@register_backend(AttentionBackend.FLASH_VARLEN, constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16])
+@register_backend(
+    AttentionBackend.FLASH_VARLEN,
+    constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16],
+)
 def _flash_varlen_attention(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -230,7 +283,9 @@ def _flash_varlen_attention(
     scale: Optional[float] = None,
 ) -> torch.Tensor:
     if not _CAN_USE_FLASH_ATTN_2:
-        raise RuntimeError(f"Backend '{AttentionBackend.FLASH_VARLEN}' requires flash-attn.")
+        raise RuntimeError(
+            f"Backend '{AttentionBackend.FLASH_VARLEN}' requires flash-attn."
+        )
 
     batch_size, seq_len_q, _, _ = query.shape
     _, seq_len_kv, _, _ = key.shape
@@ -238,8 +293,10 @@ def _flash_varlen_attention(
     if attn_mask is not None:
         attn_mask = _normalize_attn_mask(attn_mask, batch_size, seq_len_kv)
 
-    (_, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (max_seqlen_q, max_seqlen_k) = _prepare_for_flash_attn_varlen(
-        batch_size, seq_len_q, seq_len_kv, attn_mask=attn_mask, device=query.device
+    (_, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (max_seqlen_q, max_seqlen_k) = (
+        _prepare_for_flash_attn_varlen(
+            batch_size, seq_len_q, seq_len_kv, attn_mask=attn_mask, device=query.device
+        )
     )
 
     query_packed = query.flatten(0, 1)
@@ -273,7 +330,10 @@ def _flash_varlen_attention(
     return out
 
 
-@register_backend(AttentionBackend.FLASH_3, constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16])
+@register_backend(
+    AttentionBackend.FLASH_3,
+    constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16],
+)
 def _flash_attention_3(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -284,7 +344,9 @@ def _flash_attention_3(
     scale: Optional[float] = None,
 ) -> torch.Tensor:
     if not _CAN_USE_FLASH_ATTN_3:
-        raise RuntimeError(f"Backend '{AttentionBackend.FLASH_3}' requires Flash Attention 3 beta.")
+        raise RuntimeError(
+            f"Backend '{AttentionBackend.FLASH_3}' requires Flash Attention 3 beta."
+        )
 
     kwargs = {
         "q": query,
@@ -305,7 +367,10 @@ def _flash_attention_3(
     return out
 
 
-@register_backend(AttentionBackend.FLASH_VARLEN_3, constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16])
+@register_backend(
+    AttentionBackend.FLASH_VARLEN_3,
+    constraints=[_check_device_cuda, _check_qkv_dtype_bf16_or_fp16],
+)
 def _flash_varlen_attention_3(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -316,7 +381,9 @@ def _flash_varlen_attention_3(
     scale: Optional[float] = None,
 ) -> torch.Tensor:
     if not _CAN_USE_FLASH_ATTN_3:
-        raise RuntimeError(f"Backend '{AttentionBackend.FLASH_VARLEN_3}' requires Flash Attention 3 beta.")
+        raise RuntimeError(
+            f"Backend '{AttentionBackend.FLASH_VARLEN_3}' requires Flash Attention 3 beta."
+        )
 
     batch_size, seq_len_q, _, _ = query.shape
     _, seq_len_kv, _, _ = key.shape
@@ -324,8 +391,10 @@ def _flash_varlen_attention_3(
     if attn_mask is not None:
         attn_mask = _normalize_attn_mask(attn_mask, batch_size, seq_len_kv)
 
-    (_, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (max_seqlen_q, max_seqlen_k) = _prepare_for_flash_attn_varlen(
-        batch_size, seq_len_q, seq_len_kv, attn_mask=attn_mask, device=query.device
+    (_, seqlens_k), (cu_seqlens_q, cu_seqlens_k), (max_seqlen_q, max_seqlen_k) = (
+        _prepare_for_flash_attn_varlen(
+            batch_size, seq_len_q, seq_len_kv, attn_mask=attn_mask, device=query.device
+        )
     )
 
     query_packed = query.flatten(0, 1)
@@ -355,7 +424,9 @@ def _flash_varlen_attention_3(
         "causal": is_causal,
     }
 
-    supports_return_probs = "return_attn_probs" in inspect.signature(flash_attn_3_varlen_func).parameters
+    supports_return_probs = (
+        "return_attn_probs" in inspect.signature(flash_attn_3_varlen_func).parameters
+    )
 
     if supports_return_probs:
         kwargs["return_attn_probs"] = False
@@ -369,7 +440,10 @@ def _flash_varlen_attention_3(
     return out
 
 
-@register_backend(AttentionBackend.MPS_FLASH, constraints=[_check_device_mps, _check_qkv_dtype_bf16_or_fp16])
+@register_backend(
+    AttentionBackend.MPS_FLASH,
+    constraints=[_check_device_mps, _check_qkv_dtype_bf16_or_fp16],
+)
 def _mps_flash_attention(
     query: torch.Tensor,
     key: torch.Tensor,
@@ -397,7 +471,9 @@ def _mps_flash_attention(
         mfa_mask = mps_flash_attn.convert_mask(_process_mask(attn_mask, query.dtype))
 
     out = mps_flash_attn.flash_attention(
-        query, key, value,
+        query,
+        key,
+        value,
         is_causal=is_causal,
         scale=scale,
         attn_mask=mfa_mask,
@@ -417,7 +493,6 @@ def _native_attention_wrapper(
     scale: Optional[float] = None,
     backend_kernel=None,
 ) -> torch.Tensor:
-
     query = query.transpose(1, 2)
     key = key.transpose(1, 2)
     value = value.transpose(1, 2)
@@ -426,11 +501,23 @@ def _native_attention_wrapper(
     if backend_kernel is not None:
         with torch.nn.attention.sdpa_kernel(backend_kernel):
             out = F.scaled_dot_product_attention(
-                query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+                query,
+                key,
+                value,
+                attn_mask=attn_mask,
+                dropout_p=dropout_p,
+                is_causal=is_causal,
+                scale=scale,
             )
     else:
         out = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale
+            query,
+            key,
+            value,
+            attn_mask=attn_mask,
+            dropout_p=dropout_p,
+            is_causal=is_causal,
+            scale=scale,
         )
 
     return out.transpose(1, 2).contiguous()
@@ -460,7 +547,9 @@ def _native_flash_attention(
 
 @register_backend(AttentionBackend.NATIVE_MATH)
 def _math_attention(*args, **kwargs):
-    return _native_attention_wrapper(*args, **kwargs, backend_kernel=torch.nn.attention.SDPBackend.MATH)
+    return _native_attention_wrapper(
+        *args, **kwargs, backend_kernel=torch.nn.attention.SDPBackend.MATH
+    )
 
 
 @register_backend(AttentionBackend.NATIVE)
@@ -478,7 +567,6 @@ def dispatch_attention(
     scale: Optional[float] = None,
     backend: Union[str, AttentionBackend, None] = None,
 ) -> torch.Tensor:
-
     if isinstance(backend, AttentionBackend):
         backend = backend.value
     elif backend is None:
@@ -488,21 +576,37 @@ def dispatch_attention(
 
     # Explicit dispatch to avoid dynamo guard issues on global dict
     if backend == AttentionBackend.FLASH:
-        return _flash_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _flash_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.FLASH_VARLEN:
-        return _flash_varlen_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _flash_varlen_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.FLASH_3:
-        return _flash_attention_3(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _flash_attention_3(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.FLASH_VARLEN_3:
-        return _flash_varlen_attention_3(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _flash_varlen_attention_3(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.MPS_FLASH:
-        return _mps_flash_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _mps_flash_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.NATIVE_FLASH:
-        return _native_flash_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _native_flash_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     elif backend == AttentionBackend.NATIVE_MATH:
-        return _math_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _math_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
     else:
-        return _native_attention(query, key, value, attn_mask, dropout_p, is_causal, scale)
+        return _native_attention(
+            query, key, value, attn_mask, dropout_p, is_causal, scale
+        )
 
 
 def set_attention_backend(backend: Union[str, AttentionBackend, None]):
