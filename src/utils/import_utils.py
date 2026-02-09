@@ -4,11 +4,17 @@ import torch
 
 
 def is_flash_attn_available():
-    return importlib.util.find_spec("flash_attn") is not None
+    try:
+        return importlib.util.find_spec("flash_attn") is not None
+    except (ImportError, ModuleNotFoundError, ValueError, AttributeError):
+        return False
 
 
 def is_flash_attn_3_available():
-    return importlib.util.find_spec("flash_attn_interface") is not None
+    try:
+        return importlib.util.find_spec("flash_attn_interface") is not None
+    except (ImportError, ModuleNotFoundError, ValueError, AttributeError):
+        return False
 
 
 def is_torch_version(operator: str, version: str):
