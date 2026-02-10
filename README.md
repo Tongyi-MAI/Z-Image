@@ -225,6 +225,11 @@ image.save("example.png")
 
 </details>
 
+### Troubleshooting
+
+- Flash-Attention (optional): native inference defaults to PyTorch SDPA. If you see an error like "Requires Flash-attention version ...", either install a compatible flash-attn version or force native SDPA with `ZIMAGE_ATTENTION=_native_flash`.
+- ComfyUI: This repo does not ship ComfyUI nodes. If you use ComfyUI, keep plugins updated; outdated comfyui-dev-utils has been reported to break after ComfyUI core updates. Please report ComfyUI-specific crashes in the ComfyUI repo with logs.
+
 ## 🔬 Decoupled-DMD: The Acceleration Magic Behind Z-Image
 
 [![arXiv](https://img.shields.io/badge/arXiv-2511.22677-b31b1b.svg)](https://arxiv.org/abs/2511.22677)
