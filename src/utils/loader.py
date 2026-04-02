@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-import sys
 from typing import Optional, Union
 
 from loguru import logger
@@ -11,7 +10,7 @@ from safetensors.torch import load_file
 import torch
 from transformers import AutoModel, AutoTokenizer
 
-from config import (
+from src.config import (
     DEFAULT_SCHEDULER_NUM_TRAIN_TIMESTEPS,
     DEFAULT_SCHEDULER_SHIFT,
     DEFAULT_SCHEDULER_USE_DYNAMIC_SHIFTING,
@@ -36,8 +35,8 @@ from config import (
     ROPE_AXES_LENS,
     ROPE_THETA,
 )
-from zimage.autoencoder import AutoencoderKL as LocalAutoencoderKL
-from zimage.scheduler import FlowMatchEulerDiscreteScheduler
+from src.zimage.autoencoder import AutoencoderKL as LocalAutoencoderKL
+from src.zimage.scheduler import FlowMatchEulerDiscreteScheduler
 
 DIFFUSERS_AVAILABLE = False
 
@@ -99,8 +98,7 @@ def load_from_local_dir(
     """
     model_dir = Path(model_dir)
 
-    sys.path.insert(0, str(model_dir.parent.parent / "Z-Image" / "src"))
-    from zimage.transformer import ZImageTransformer2DModel
+    from src.zimage.transformer import ZImageTransformer2DModel
 
     if verbose:
         logger.info(f"Loading Z-Image from: {model_dir}")

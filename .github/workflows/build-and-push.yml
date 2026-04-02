@@ -1,0 +1,87 @@
+name: Build and Push Docker Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker tag to publish"
+        required: true
+        default: "zedit-v1"
+      update_latest:
+        description: "Also push the latest tag"
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    permissions:
+      contents: read
+
+    env:
+      IMAGE_NAME: nav2apo/zimage-api
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free disk space on runner
+        run: |
+          df -h
+          sudo rm -rf /usr/local/lib/android || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          docker system prune -af || true
+          df -h
+
+      - name: Verify Docker Hub secrets exist
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME"
+          test -n "$DOCKERHUB_TOKEN"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare image tags
+        id: prep
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          INPUT_TAG="${{ github.event.inputs.image_tag }}"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "input_tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build application image
+        shell: bash
+        run: |
+          docker build --platform linux/amd64 \
+            -t "${IMAGE_NAME}:${{ steps.prep.outputs.input_tag }}" \
+            -t "${IMAGE_NAME}:sha-${{ steps.prep.outputs.short_sha }}" \
+            .
+
+      - name: Push requested tags
+        shell: bash
+        run: |
+          docker push "${IMAGE_NAME}:${{ steps.prep.outputs.input_tag }}"
+          docker push "${IMAGE_NAME}:sha-${{ steps.prep.outputs.short_sha }}"
+
+      - name: Optionally update latest
+        if: ${{ github.event.inputs.update_latest == 'true' }}
+        shell: bash
+        run: |
+          docker tag "${IMAGE_NAME}:${{ steps.prep.outputs.input_tag }}" "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
