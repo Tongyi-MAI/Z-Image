@@ -266,6 +266,8 @@ Our core insight behind DMDR is that Reinforcement Learning (RL) and Distributio
 - [Candle](https://github.com/huggingface/candle) is a minimalist machine learning (ML) framework launched by Huggingface for Rust, which now [supports](https://github.com/huggingface/candle/pull/3261) Z-Image.
 - [MeanCache](https://github.com/UnicomAI/MeanCache), a training-free inference acceleration method for Flow Matching models by China Unicom Data Science and Artificial Intelligence Research Institute. Delivers up to **3.7x** speedup for **Z-Image** generation with plug-and-play integration while preserving output quality.
 
+- [qingming-z-image-turbo](https://github.com/uulong950/qingming-z-image-turbo) is a native HIP/C++ inference implementation of Z-Image-Turbo for AMD ROCm, specifically optimized and validated for AMD Radeon RX 7900 XTX 24GB / gfx1100. It supports BF16, Q8_0, Q6_K, and Q5_K_M execution paths without requiring PyTorch, Diffusers, ComfyUI, or a Python runtime.
+
 ## 🚀 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Tongyi-MAI/Z-Image&type=date&legend=top-left)](https://www.star-history.com/#Tongyi-MAI/Z-Image&type=date&legend=top-left)
