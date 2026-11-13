@@ -265,6 +265,7 @@ Our core insight behind DMDR is that Reinforcement Learning (RL) and Distributio
 - [SGLang-Diffusion](https://lmsys.org/blog/2025-11-07-sglang-diffusion/) brings SGLang's state-of-the-art performance to accelerate image and video generation for diffusion models, now [supporting](https://github.com/sgl-project/sglang/blob/main/python/sglang/multimodal_gen/runtime/pipelines/zimage_pipeline.py) Z-Image.
 - [Candle](https://github.com/huggingface/candle) is a minimalist machine learning (ML) framework launched by Huggingface for Rust, which now [supports](https://github.com/huggingface/candle/pull/3261) Z-Image.
 - [MeanCache](https://github.com/UnicomAI/MeanCache), a training-free inference acceleration method for Flow Matching models by China Unicom Data Science and Artificial Intelligence Research Institute. Delivers up to **3.7x** speedup for **Z-Image** generation with plug-and-play integration while preserving output quality.
+- [h3metal](https://github.com/audenvenn/h3metal) runs **Z-Image-Turbo** natively on Apple Silicon with its own Metal engine for the matrix units of M5/M6 GPUs (int8 matrix products, flash attention): a 1024×1024 image in about **17 s** on an M6 Mac mini, matching the official pipeline (31 dB PSNR against diffusers in bf16).
 
 ## 🚀 Star History
 
